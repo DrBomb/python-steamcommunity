@@ -1,4 +1,4 @@
-import requests, urllib, base64, time, pdb
+import requests, urllib, base64, time, re, pdb
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5
 
@@ -50,6 +50,8 @@ class SteamLogin(object):
         login_response = self.request.post("https://steamcommunity.com/login/dologin/",data=payload)
         data = login_response.json()
         self.deleteMobileCookies()
+        if login_response.status_code == 429:
+            raise TooManyRequestsException(login_response.headers['Retry-after'])
         if login_response.status_code != 200:
             raise Error("Server Error with a reponse code " + str(login_response.status_code))
         if not data['success']:
@@ -61,9 +63,36 @@ class SteamLogin(object):
                 self._captchaGid = data['captcha_gid']
                 raise CaptchaRequiredException(self._captchaGid)
             else:
-                raise AuthenticationException("Please verify your login credentials")
+                raise AuthenticationException(data.get('message'))
         self.login_response = data
-
+        self.custom_url = self._getCustomURL()
+        self.steamID = self._getSteamID()
+    def _getCustomURL(self):
+        response = self.request.get("https://steamcommunity.com/my")
+        if response.status_code != 200:
+            raise Error("Malformed response")
+        url = response.url
+        match = re.search("https\:\/\/steamcommunity.com\/login\/home\/(\s\S)*",url)
+        if match is not None:
+            raise NotLoggedInException()
+        match = re.search("https\:\/\/steamcommunity.com\/id\/(\w+)\/",url)
+        if match is None:
+            raise Error("Malformed Response")
+        return match.groups()[0]
+    def _getSteamID(self):
+        response = self.request.get("https://steamcommunity.com/id/"+self.custom_url+"/?xml=1")
+        match = re.search("<steamID64>(\d+)<\/steamID64>",response.text)
+        if match is None:
+            raise Error("Something has gone wrong")
+        return match.groups()[0]
+    def loggedIn(self):
+        resp = self.request.get("https://steamcommunity.com/my",allow_redirects=False)
+        url = resp.headers['Location']
+        match = re.search("https\:\/\/steamcommunity.com\/login\/home\/(\s\S)*",url)
+        if match is not None:
+            return False
+        else:
+            return True
     def deleteMobileCookies(self):
         self.request.cookies.pop('mobileClientVersion')
         self.request.cookies.pop('mobileClient')
@@ -89,3 +118,13 @@ class CaptchaRequiredException(Error):
 class TwoFactorCodeRequiredException(Error):
     def __str__(self):
         return "A Two Factor Code is required to Log in"
+class AuthenticationException(Error):
+    pass
+class NotLoggedInException(Error):
+    def __str__(self):
+        return "Not logged in"
+class TooManyRequestsException(Error):
+    def __init__(self,RetryAfter):
+        self.retryafter = int(RetryAfter)
+    def __str__(self):
+        return "The server requests you to refrain sending more requests for " + self.retryafter + " seconds"

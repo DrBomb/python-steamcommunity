@@ -1,42 +1,58 @@
 from SteamLogin import SteamLogin
 
 class Inventory(object):
-    def __init__(self,Login):
+    def __init__(self,Login,**kwargs):
         assert isinstance(Login,SteamLogin), "Login is not an instance of SteamLogin"
         self.Login = Login
         self.request = Login.request
-        self.items = []
-    def getInventory(self,steamID,appID,contextID,tradeable=False):
-        self.steamID = steamID
-        self.appID = appID
-        self.contextID = contextID
-        self.items = []
-        params = {}
+        self.custom_url = kwargs.get('custom_url')
+        self.steamID = kwargs.get('steamID')
+        self.items = {}
+    def getInventory(self,appID,contextID,tradeable=True,**kwargs):
+        update = kwargs.get('update')
+        if update is None:
+            if appID in self.items.keys():
+                if contextID in self.items[appID].keys():
+                    return
         if tradeable:
-            params['trading'] = 1
-        response = self.request.get("https://steamcommunity.com/id/" + steamID + "/inventory/json/" + str(appID) + "/" + str(contextID),params=params)
+            params = {'trading':1}
+        else:
+            params = {'trading':0}
+        if (self.custom_url is None) and (self.steamID is None):
+            raise InventoryException("This inventory has no steam account associated")
+        if self.custom_url is not None:
+            url = "https://steamcommunity.com/id/" + self.custom_url + "/inventory/json/" + str(appID) + "/" + str(contextID)
+        else:
+            url = "https://steamcommunity.com/profiles/" + str(self.steamID) + "/inventory/json/" + str(appID) + "/" + str(contextID)
+        response = self.request.get(url,params=params)
         if response.status_code != 200:
             raise Exception("Server Error")
         data = response.json()
-        if data['success'] != True:
+        self.createItemsFromResponse(appID,contextID,data)
+    def __str__(self):
+        return("Steam Inventory for " + self.steamID + " on App: " + self.appID + " and Context: " + self.contextID)
+    def createItemsFromResponse(self,appID,contextID,jsonData):
+        if jsonData['success'] != True:
             try:
-                error = data['Error']
+                error = jsonData['Error']
                 if(error == "This profile is private."):
                     raise InventoryPrivateException(steamID)
             except KeyError:
-                raise InventoryException(steamID)
-        rgInventory = data['rgInventory']
-        rgDescriptions = data['rgDescriptions']
+                raise InventoryException(appID,contextID,custom_url=self.custom_url,steamID=self.steamID)
+        items = {}
+        rgInventory = jsonData['rgInventory']
+        rgDescriptions = jsonData['rgDescriptions']
         for x in rgInventory.keys():
-            item_id = x
-            class_id = rgInventory[x]['classid']
-            instance_id = rgInventory[x]['instanceid']
-            amount = rgInventory[x]['amount']
-            key = str(class_id) + "_" + str(instance_id)
+            item_id = int(x)
+            class_id = int(rgInventory[x]['classid'])
+            instance_id = int(rgInventory[x]['instanceid'])
+            amount = int(rgInventory[x]['amount'])
+            key = "_".join([str(class_id),str(instance_id)])
             description = rgDescriptions[key]
-            self.items.append(Item(item_id,contextID,class_id,instance_id,amount,description))
-    def __str__(self):
-        return("Steam Inventory for " + self.steamID + " on App: " + self.appID + " and Context: " + self.contextID)
+            items.update({item_id:Item(item_id,contextID,class_id,instance_id,amount,description)})
+        if appID not in self.items.keys():
+            self.items[appID] = {}
+        self.items[appID][contextID] = items
 
 class Item(object):
     def __init__(self,item_id,contextID,class_id,instance_id,amount,description):
@@ -76,8 +92,9 @@ class Item(object):
         return self.getMarketHashName()
 
 class InventoryException(Exception):
-    def __init__(self,steamID,appID,contextID):
-        self.steamID = steamID
+    def __init__(self,appID,contextID,**kwargs):
+        self.steamID = kwargs.get('steamID')
+        self.custom_url = kwargs.get('custom_url')
         self.appID = appID
         self.contextID = contextID
     def __str__(self):
