@@ -1,13 +1,12 @@
 from SteamLogin import SteamLogin
+from SteamExceptions import ReceiptFailed
+from utils import ignoreConnectionErrors
 from SteamInventory import Inventory, Item
 from urlparse import urlparse, parse_qs
+from bs4 import BeautifulSoup
 import re, json, pdb
 
 class Offer(object):
-    OurContextsRE = re.compile(r'var g_rgAppContextData = ([\s\"\\\/\-\w\d\{\}\[\]\:\.\,]+);')
-    TheirContextsRE = re.compile(r'var g_rgPartnerAppContextData = ([\s\"\\\/\-\w\d\{\}\[\]\:\.\,]+);')
-    OurSteamIDRE = re.compile(r'UserYou\.SetSteamId\( \'(\d+)\' \);')
-    TheirSteamIDRE = re.compile(r'UserThem\.SetSteamId\( \'(\d+)\' \);')
     def __init__(self,Login,**kwargs):
         assert isinstance(Login, SteamLogin), str(Login) + " is not an instance of SteamLogin"
         self.Login = Login
@@ -31,7 +30,7 @@ class Offer(object):
                 break
         else:
             raise Exception("Sessionid is missing from Login cookies")
-
+    @ignoreConnectionErrors
     def newOffer(self,tradeURL):
         self.tradeURL = tradeURL
         o = urlparse(tradeURL)
@@ -46,24 +45,26 @@ class Offer(object):
             self.token = q['token'][0]
         except AssertionError:
             print("Invalid TradeURL")
-            raise
+            raise TradeURLInvalid
         tradeURLResponse = self.request.get(tradeURL)
         self.tradeURLResponse = tradeURLResponse
         if tradeURLResponse.status_code != 200:
             print tradeURLResponse.text
             raise Exception("Server Error" + str(tradeURLResponse.status_code))
         text = tradeURLResponse.text
-        match = re.search("You cannot trade with",text)
+        match = re.search("(You cannot trade with|This Trade URL is no longer valid for sending a trade offer to)",text)
         if match is not None:
-            raise TradeOfferException("This trade URL is invalid or has expired")
+            raise TradeURLInvalid("This trade URL is invalid or has expired")
         try:
             self.MyContexts = json.loads(re.search(r"var g_rgAppContextData = ([\s\"\\\/\-\w\d\{\}\[\]\:\.\,\']+);",text).group(1))
             self.PartnerContexts = json.loads(re.search(r"var g_rgPartnerAppContextData = ([\s\"\\\/\-\w\d\{\}\[\]\:\.\,\']+);",text).group(1))
             self.PartnerSteamID = long(re.search(r"UserThem\.SetSteamId\( \'(\d+)\' \);",text).group(1))
+            self.OurEscrow = int(re.search(r"var g_daysMyEscrow = (\d+);",text).group(1))
+            self.TheirEscrow = int(re.search(r"var g_daysTheirEscrow = (\d+);",text).group(1))
         except:
             print tradeURLResponse.text
             raise
-
+    @ignoreConnectionErrors
     def loadPartnerInventory(self,appID,contextID):
         sessionid = self.sessionid
         url = "https://steamcommunity.com/tradeoffer/new/partnerinventory"
@@ -77,13 +78,9 @@ class Offer(object):
         data = self.request.get(url,params=parameters).json()
         self.PartnerInventory = Inventory(self.Login,steamID=self.PartnerSteamID)
         self.PartnerInventory.createItemsFromResponse(appID,contextID,data)
-    
+    @ignoreConnectionErrors
     def loadOurInventory(self,appID,contextID):
         self.request.headers['Referer'] = self.tradeURL
-        url = "https://steamcommunity.com/profiles/" + str(self.MySteamID) + "/inventory/json/" + str(appID) + "/" + str(contextID)
-        data = self.request.get(url,params={'trading':1}).json()
-        rgInventory = data['rgInventory']
-        rgDescriptions = data['rgDescriptions']
         self.MyInventory = Inventory(self.Login,steamID=self.MySteamID)
         self.MyInventory.getInventory(appID,contextID)
         
@@ -131,7 +128,10 @@ class Offer(object):
                 'trade_offer_access_token':self.token,
         }
         return json.dumps(payload,separators=(',',':'))
+    @ignoreConnectionErrors
     def sendOffer(self):
+        if self.offerID is not None:
+            raise OfferAlreadySent("This offer has been already sent")
         self.request.headers['Referer'] = self.tradeURL
         tradedata = {
                 'sessionid':self.sessionid,
@@ -141,9 +141,32 @@ class Offer(object):
                 'json_tradeoffer':self._get_json_tradeoffer(),
                 'trade_offer_create_params':self._get_trade_offer_create_params(),
         }
-        print tradedata
         url = "https://steamcommunity.com/tradeoffer/new/send"
         self.sendOfferResponse = self.request.post(url,data=tradedata)
+        offerdata = self.sendOfferResponse.json()
+        self.offerID, self.needsMobileConfirmation, self.needEmailConfirmation, self.email_domain = (offerdata.get('tradeofferid'), 
+                offerdata.get('needs_mobile_confirmation'), offerdata.get('needs_email_confirmation'), offerdata.get('email_domain'))
+
+class Receipt(object):
+    @ignoreConnectionErrors(echo=True)
+    def __init__(self,Login,tradeID):
+        assert isinstance(Login,SteamLogin)
+        url = "".join(["http://steamcommunity.com/trade/",str(tradeID),"/receipt/"])
+        self.response = Login.request.get(url)
+        try:
+            data = json.loads(self.response.text)
+            if data['success'] == False:
+                raise ReceiptFailed
+        except ValueError:
+            pass
+        self.item = json.loads(re.search(r"oItem = ([\s\"\\\/\-\w\d\{\}\[\]\:\.\,\'\_\|\(\)]+);",self.response.text).group(1))
+        self.__dict__.update(self.item)
+
+        
 
 class TradeOfferException(Exception):
+    pass
+class TradeURLInvalid(Exception):
+    pass
+class OfferAlreadySent(Exception):
     pass

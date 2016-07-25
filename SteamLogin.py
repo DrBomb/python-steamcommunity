@@ -1,6 +1,8 @@
 import requests, urllib, base64, time, re, pdb
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5
+from SteamMobileAuth import getDeviceID
+from bs4 import BeautifulSoup
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.106 Safari/537.36"
 
@@ -97,6 +99,68 @@ class SteamLogin(object):
         self.request.cookies.pop('mobileClientVersion')
         self.request.cookies.pop('mobileClient')
 
+    def getTradeConfirmations(self,key,time):
+        confs = []
+        response = self._confirmationsRequest("conf",key,time,'conf')
+        soup = BeautifulSoup(response.text,'html.parser')
+        empty = soup.find(id="mobileconf_empty")
+        if empty is not None:
+            return confs
+        container = soup.find(id="mobileconf_list")
+        entries = container.find_all(class_="mobileconf_list_entry")
+        for x in entries:
+            img = x.select(".mobileconf_list_entry_icon img")[0]
+            info = x.select(".mobileconf_list_entry_description > div")
+            data = {
+                    'id':x['data-confid'],
+                    'key':x['data-key'],
+                    'title':info[0].string,
+                    'receiving':info[1].string,
+                    'time':info[2].string,
+                    'icon':img['src'] if len(img['src']) > 0 else "",
+                    }
+            confs.append(Confirmation(**data))
+        return confs
+
+    def getConfirmationOfferID(self,confID,key,time):
+        response = self._confirmationsRequest("details/"+str(confID),key,time,'details')
+        soup = BeautifulSoup(response.json()['html'],'html.parser')
+        element = soup.find(class_="tradeoffer")
+        split = element['id'].split("_")
+        return int(split[1])
+
+    def respondToConfirmation(self,confID,confKey,key,time,accept=True):
+        data = {
+                "op":"allow" if accept else "cancel",
+                "cid":confID,
+                "ck":confKey,
+                }
+        response = self._confirmationsRequest("ajaxop",key,time,data["op"],data)
+        return response.json()
+
+    def _confirmationsRequest(self,url,key,keytime,tag,args=None):
+        arguments = {
+            'p':getDeviceID(self.steamID),
+            'a':self.steamID,
+            'k':key,
+            't':keytime,
+            'm':"android",
+            'tag':tag
+            }
+        if args is not None:
+            arguments.update(args)
+        req = "https://steamcommunity.com/mobileconf/" + url
+        while True:
+            try:
+                response = self.request.get(req,params=arguments)
+                return response
+            except requests.exceptions.ConnectionError as e:
+                print e
+                time.sleep(1)
+
+class Confirmation(object):
+    def __init__(self,**kwargs):
+        self.__dict__.update(kwargs)
 
 class Error(Exception):
     #Base Exception
