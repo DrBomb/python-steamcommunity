@@ -13,9 +13,9 @@ A basic LogIn flow is:
       dictionary and try logging in again
     - CaptchaRequiredException: This is a tricky one, a captcha GUID will be stored to the Login object,
       while the exception will return the URL on the message. You must solve the captcha and put the
-      "captcha_text" key onto the dict in order to log in again. This is not handled by this example
+      "captcha_text" key onto the dict in order to log in again. This is handled very roughly by the example
     - EmailAuthException: Just like the TwoFactorCodeRequired exception but with email
-3. If auth was successfull the Login.requests.cookies object will have the session and steam can be used as normal
+3. If auth was successful the Login.requests.cookies object will have the session and steam can be used as normal
 
 '''
 
