@@ -16,9 +16,7 @@ class Offer(object):
         self.theirAssets = []
         self.tradeMessage = ""
         self.tradeURL = kwargs.get('tradeURL')
-        self.offerID = kwargs.get('offerID')
-        if self.offerID is not None:
-            print "Offer id handling is still on development"
+        self.offerID = None
         elif self.tradeURL is not None:
             self.newOffer(self.tradeURL)
         else:
