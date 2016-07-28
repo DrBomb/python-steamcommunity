@@ -17,7 +17,7 @@ class Offer(object):
         self.tradeMessage = ""
         self.tradeURL = kwargs.get('tradeURL')
         self.offerID = None
-        elif self.tradeURL is not None:
+        if self.tradeURL is not None:
             self.newOffer(self.tradeURL)
         else:
             raise Exception("Empty TradeOffer")
