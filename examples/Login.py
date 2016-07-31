@@ -47,5 +47,5 @@ except IOError:
         except SteamLogin.TooManyRequestsException as e:
             print "Retrying after " + e.retryafter+5 + " seconds"
             time.sleep(e.retryafter+5)
-        with open("Login.pickle",'wb') as f:
-            pickle.dump(Login,f)
+    with open("Login.pickle",'wb') as f:
+        pickle.dump(Login,f)
