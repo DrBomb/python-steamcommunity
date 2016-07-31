@@ -1,4 +1,6 @@
 from SteamLogin import SteamLogin
+from utils import ignoreConnectionErrors
+
 
 class Inventory(object):
     def __init__(self,Login,**kwargs):
@@ -8,6 +10,7 @@ class Inventory(object):
         self.custom_url = kwargs.get('custom_url')
         self.steamID = kwargs.get('steamID')
         self.items = {}
+    @ignoreConnectionErrors(echo=True) 
     def getInventory(self,appID,contextID,tradeable=True,**kwargs):
         update = kwargs.get('update')
         if update is None:
@@ -21,9 +24,9 @@ class Inventory(object):
         if (self.custom_url is None) and (self.steamID is None):
             raise InventoryException("This inventory has no steam account associated")
         if self.custom_url is not None:
-            url = "https://steamcommunity.com/id/" + self.custom_url + "/inventory/json/" + str(appID) + "/" + str(contextID)
+            url = "".join(["https://steamcommunity.com/id/",self.custom_url,"/inventory/json/",str(appID),"/",str(contextID)])
         else:
-            url = "https://steamcommunity.com/profiles/" + str(self.steamID) + "/inventory/json/" + str(appID) + "/" + str(contextID)
+            url = "".join(["https://steamcommunity.com/profiles/",str(self.steamID),"/inventory/json/",str(appID),"/",str(contextID)])
         response = self.request.get(url,params=params)
         if response.status_code != 200:
             raise Exception("Server Error")
@@ -62,20 +65,20 @@ class Item(object):
         self.amount = amount
         self.appid = description['appid']
         self.contextid = contextID
-        self.icon_url = "http://cdn.steamcommunity.com/economy/image/" + description['icon_url']
-        self.icon_url_large = "http://cdn.steamcommunity.com/economy/image/" + description['icon_url_large'] if 'icon_url_large' in description.keys() else ""
-        self.icon_drag_url = description['icon_drag_url']
-        self.name = description['name']
-        self.market_hash_name = description['market_hash_name']
-        self.market_name = description['market_name']
-        self.name_color = description['name_color']
-        self.background_color = description['background_color']
-        self.type = description['type']
-        self.tradable = bool(description['tradable'])
-        self.marketable = bool(description['marketable'])
-        self.commodity = bool(description['commodity'])
-        self.market_tradable_restriction = description['market_tradable_restriction']
-        self.descripctions = description['descriptions']
+        self.icon_url = "".join(["http://cdn.steamcommunity.com/economy/image/",description['icon_url']])
+        self.icon_url_large = "".join(["http://cdn.steamcommunity.com/economy/image/",description['icon_url_large']]) if 'icon_url_large' in description.keys() else ""
+        self.icon_drag_url = description.get('icon_drag_url')
+        self.name = description.get('name')
+        self.market_hash_name = description.get('market_hash_name')
+        self.market_name = description.get('market_name')
+        self.name_color = description.get('name_color')
+        self.background_color = description.get('background_color')
+        self.type = description.get('type')
+        self.tradable = bool(description.get('tradable',True))
+        self.marketable = bool(description.get('marketable',True))
+        self.commodity = bool(description.get('commodity',True))
+        self.market_tradable_restriction = description.get('market_tradable_restriction')
+        self.descripctions = description.get('descriptions')
         self.actions = description['actions'] if 'actions' in description.keys() else ""
         self.market_actions = description['market_actions'] if 'market_actions' in description.keys() else ""
         self.tags = description['tags']
@@ -103,5 +106,5 @@ class InventoryPrivateException(Exception):
     def __init__(self,steamID):
         self.steamID = steamID
     def __str__(self):
-        return "The steam profile " +steamID+" is private"
+        return " ".join(["The steam profile",steamID,"is private"])
 

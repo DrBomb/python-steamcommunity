@@ -37,18 +37,13 @@ def generateAuthCode(secret,offset=0):
 def generateConfirmationKey(identitySecret,time,tag=""):
     identitysecret = b64decode(identitySecret)
     secret = BitArray(bytes=identitysecret,length=len(identitysecret)*8)
-    datalen = 8
     if tag != "":
-        if(len(tag)>32):
-            datalen+=32
-        else:
-            datalen+=len(tag)
         tagBuff = BitArray(bytes=tag,length=len(tag)*8)
-    buff = BitArray(datalen*8)
+    buff = BitArray(4*8)
     time = int(time)
-    buff[:-4*8] = time
+    buff.append(BitArray(int=time,length=32))
     if tag != "":
-        buff[8*8:] = tagBuff
+        buff.append(tagBuff)
     conf_hmac = hmac.new(secret.tobytes(),buff.tobytes(),hashlib.sha1)
     return b64encode(conf_hmac.digest())
 
