@@ -10,7 +10,7 @@ class Inventory(object):
         self.custom_url = kwargs.get('custom_url')
         self.steamID = kwargs.get('steamID')
         self.items = {}
-    @ignoreConnectionErrors(echo=True) 
+    @ignoreConnectionErrors(echo=True)
     def getInventory(self,appID,contextID,tradeable=True,**kwargs):
         update = kwargs.get('update')
         if update is None:
