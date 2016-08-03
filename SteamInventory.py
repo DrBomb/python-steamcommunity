@@ -78,7 +78,7 @@ class Item(object):
         self.marketable = bool(description.get('marketable',True))
         self.commodity = bool(description.get('commodity',True))
         self.market_tradable_restriction = description.get('market_tradable_restriction')
-        self.descripctions = description.get('descriptions')
+        self.descriptions = description.get('descriptions')
         self.actions = description['actions'] if 'actions' in description.keys() else ""
         self.market_actions = description['market_actions'] if 'market_actions' in description.keys() else ""
         self.tags = description['tags']
