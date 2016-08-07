@@ -3,8 +3,7 @@ from SteamExceptions import ReceiptFailed
 from utils import ignoreConnectionErrors
 from SteamInventory import Inventory, Item
 from urlparse import urlparse, parse_qs
-from bs4 import BeautifulSoup
-import re, json, pdb
+import re, json
 
 class Offer(object):
     def __init__(self,Login,**kwargs):
@@ -50,18 +49,19 @@ class Offer(object):
             print tradeURLResponse.text
             raise Exception("Server Error" + str(tradeURLResponse.status_code))
         text = tradeURLResponse.text
-        match = re.search("(You cannot trade with|This Trade URL is no longer valid for sending a trade offer to)",text)
-        if match is not None:
-            raise TradeURLInvalid("This trade URL is invalid or has expired")
         try:
-            self.MyContexts = json.loads(re.search(r"var g_rgAppContextData = ([\s\"\\\/\-\w\d\{\}\[\]\:\.\,\']+);",text).group(1))
-            self.PartnerContexts = json.loads(re.search(r"var g_rgPartnerAppContextData = ([\s\"\\\/\-\w\d\{\}\[\]\:\.\,\']+);",text).group(1))
+            self.MyContexts = json.loads(re.search(r"var g_rgAppContextData = ([\s\"\\\/\-\w\d\{\}\[\]\:\.\,\'\_\&]+);",text).group(1))
+            self.PartnerContexts = json.loads(re.search(r"var g_rgPartnerAppContextData = ([\s\"\\\/\-\w\d\{\}\[\]\:\.\,\'\_\&]+);",text).group(1))
             self.PartnerSteamID = long(re.search(r"UserThem\.SetSteamId\( \'(\d+)\' \);",text).group(1))
             self.OurEscrow = int(re.search(r"var g_daysMyEscrow = (\d+);",text).group(1))
             self.TheirEscrow = int(re.search(r"var g_daysTheirEscrow = (\d+);",text).group(1))
-        except:
-            print tradeURLResponse.text
-            raise
+        except AttributeError:
+            from bs4 import BeautifulSoup
+            import pdb
+            soup = BeautifulSoup(text,'html.parser')
+            error_msg = soup.find(id="error_msg")
+            error = error_msg.text.strip() if error_msg is not None else "Malformed Response"
+            raise TradeOfferException(error)
     @ignoreConnectionErrors
     def loadPartnerInventory(self,appID,contextID):
         sessionid = self.sessionid
