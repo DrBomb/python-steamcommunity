@@ -1,3 +1,11 @@
+#Important
+
+Please do not open an issue for documentation.
+
+This module is based off [node-steamcommunity](https://github.com/DoctorMcKay/node-steamcommunity).
+
+For a more or less guide on how to use the Trade Confirmations methods on Steam Login, take a look a [this file](https://github.com/DoctorMcKay/node-steamcommunity/blob/master/components/confirmations.js) and on how to use the trade confirmation key on SteamMobileAuth take a look at [these lines](https://github.com/DoctorMcKay/node-steam-totp/blob/master/index.js#L60-L90)
+
 #python-steamcommunity
 
 Python port of node-steamcommunity with a focus on a session based login using requests
